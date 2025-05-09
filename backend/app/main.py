@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 import os
@@ -129,7 +129,7 @@ async def upload_document(file: UploadFile = File(...)):
 @app.post("/query")
 async def query_documents(query: Query):
     """
-    Query the documents using RAG
+    Query the documents using RAG with streaming response
     """
     try:
         print(f"\n🔍 Processing query: {query.question}")
@@ -142,15 +142,21 @@ async def query_documents(query: Query):
         )
         print(f"✓ Found {len(relevant_docs)} relevant documents")
         
-        # Generate response
-        print("Generating response...")
-        response = rag_chain.generate_response(relevant_docs, query.question)
-        print("✓ Response generated successfully")
+        # Log the retrieved documents for debugging
+        print("\nRetrieved Documents:")
+        for i, doc in enumerate(relevant_docs):
+            print(f"\nDocument {i+1}:")
+            print(f"Content: {doc.page_content[:200]}...")  # Print first 200 chars
         
-        return JSONResponse(
-            content={
-                "response": response,
-                "relevant_docs": len(relevant_docs)
+        # Return streaming response
+        return StreamingResponse(
+            rag_chain.generate_streaming_response(relevant_docs, query.question),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+                "Content-Type": "text/event-stream"
             }
         )
     except Exception as e:
